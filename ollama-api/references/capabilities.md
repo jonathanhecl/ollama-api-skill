@@ -86,7 +86,7 @@ Capabilities reported by `/api/show` can still fail with real prompts. Recommend
 | thinking | Enable `think`; expect non-empty `message.thinking`. |
 | vision | Send a base64 image; expect non-empty description. |
 | embeddings | Call `/api/embed`; expect non-empty vector. |
-| audio | Send a base64 audio file; expect non-empty description. Treat as experimental; some models crash the runner. |
+| audio | Send a base64 **WAV** audio file; expect non-empty description. Treat as experimental; some models crash the runner. |
 
 ## Pitfalls
 

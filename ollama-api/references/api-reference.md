@@ -106,7 +106,7 @@ Use this to check if a model is loaded, how much VRAM/RAM it uses (`size_vram`),
 
 ### POST /api/chat
 
-Chat completion. Supports text, images, audio (base64), tools, structured output, and thinking.
+Chat completion. Supports text, images, audio (WAV, base64), tools, structured output, and thinking.
 
 **Non-streaming request:**
 ```json
@@ -137,7 +137,7 @@ Set `"stream": true`. The server returns NDJSON; each line is a `ChatResponse` c
 
 #### Multimodal Messages
 
-Images and audio are sent as base64 strings in the `images` array. Ollama does not distinguish image vs audio at the field level; the client conventionally sends both via `images`.
+Images and audio are sent as base64 strings in the `images` array. Ollama does not distinguish image vs audio at the field level; the client conventionally sends both via `images`. Audio must be in **WAV** format.
 
 ```json
 {
