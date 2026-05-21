@@ -154,7 +154,7 @@ Images and audio are sent as base64 strings in the `images` array. Ollama does n
 
 #### Tool Calling
 
-Register tools in the request:
+Register tools in the request. Tool calls are supported in both streaming and non-streaming modes (streaming support added in Ollama 0.6+).
 
 ```json
 {
@@ -206,7 +206,46 @@ Pass a JSON schema or `"json"` in the `format` field:
 
 #### Thinking
 
-Some models (e.g., Qwen3) support a reasoning/thinking field. Pass `"think": true` to enable it. The response may include `message.thinking` alongside `message.content`.
+Models that support thinking (e.g., `deepseek-r1`, `qwen3`) separate reasoning from final output. Pass `"think": true` to enable it.
+
+**Request:**
+```json
+{
+  "model": "deepseek-r1",
+  "messages": [{"role": "user", "content": "how many r in strawberry?"}],
+  "think": true,
+  "stream": false
+}
+```
+
+**Response:**
+```json
+{
+  "model": "deepseek-r1",
+  "message": {
+    "role": "assistant",
+    "content": "The word 'strawberry' contains three instances of the letter 'R'...",
+    "thinking": "First, the question is: 'how many r in strawberry?' I need to count..."
+  },
+  "done": true
+}
+```
+
+- `think: false` — disables thinking; model outputs content directly.
+- `think: true` — enables thinking; both `message.thinking` and `message.content` are returned.
+- Supported models: `deepseek-r1`, `qwen3`, and others tagged with `thinking` capability.
+
+### POST /api/generate
+
+Single-turn text generation. Supports the same parameters as `/api/chat` (tools, format, think, stream, images, etc.).
+
+```json
+{
+  "model": "gemma4:e2b",
+  "prompt": "Why is the sky blue?",
+  "stream": false
+}
+```
 
 ### POST /api/embed
 

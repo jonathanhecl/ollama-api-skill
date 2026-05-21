@@ -197,6 +197,40 @@ completion = client.chat.completions.create(
 print(completion.choices[0].message.content)
 ```
 
+### Structured Outputs (Pydantic)
+```python
+from pydantic import BaseModel
+from openai import OpenAI
+
+class FriendInfo(BaseModel):
+    name: str
+    age: int
+    is_available: bool
+
+class FriendList(BaseModel):
+    friends: list[FriendInfo]
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+completion = client.beta.chat.completions.parse(
+    temperature=0,
+    model="gemma4:e2b",
+    messages=[{"role": "user", "content": "Return a list of friends in JSON format"}],
+    response_format=FriendList,
+)
+print(completion.choices[0].message.parsed)
+```
+
+### Embeddings (OpenAI SDK)
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+embeddings = client.embeddings.create(
+    model="nomic-embed-text:latest",
+    input=["why is the sky blue?", "why is the grass green?"],
+)
+```
+
 ### Vision with OpenAI SDK
 ```python
 from openai import OpenAI
@@ -282,4 +316,204 @@ while (true) {
     if (chunk.done) return;
   }
 }
+```
+
+## Official SDKs
+
+These examples use the official `ollama` Python and JavaScript libraries.
+
+### Python Official SDK
+
+#### Chat
+```python
+import ollama
+
+response = ollama.chat(
+    model='gemma4:e2b',
+    messages=[{'role': 'user', 'content': 'Why is the sky blue?'}],
+)
+print(response.message.content)
+```
+
+#### Streaming
+```python
+import ollama
+
+for chunk in ollama.chat(
+    model='gemma4:e2b',
+    messages=[{'role': 'user', 'content': 'Count to 10'}],
+    stream=True,
+):
+    print(chunk.message.content, end='', flush=True)
+```
+
+#### Vision (file path)
+```python
+import ollama
+
+response = ollama.chat(
+    model='llama3.2-vision',
+    messages=[{
+        'role': 'user',
+        'content': 'What is in this image?',
+        'images': ['image.jpg'],
+    }],
+)
+print(response.message.content)
+```
+
+#### Structured Outputs (Pydantic)
+```python
+import ollama
+from pydantic import BaseModel
+
+class Country(BaseModel):
+    name: str
+    capital: str
+    languages: list[str]
+
+response = ollama.chat(
+    model='gemma4:e2b',
+    messages=[{'role': 'user', 'content': 'Tell me about Canada.'}],
+    format=Country.model_json_schema(),
+)
+country = Country.model_validate_json(response.message.content)
+print(country)
+```
+
+#### Tool Calling
+```python
+import ollama
+
+def add_two_numbers(a: int, b: int) -> int:
+    """Add two numbers."""
+    return a + b
+
+messages = [{'role': 'user', 'content': 'What is 2 plus 3?'}]
+response = ollama.chat(
+    model='qwen3',
+    messages=messages,
+    tools=[add_two_numbers],
+)
+if response.message.tool_calls:
+    for tool in response.message.tool_calls:
+        print(tool.function.name, tool.function.arguments)
+```
+
+#### Thinking
+```python
+import ollama
+
+response = ollama.chat(
+    model='deepseek-r1',
+    messages=[{'role': 'user', 'content': 'What is 10 + 23?'}],
+    think=True,
+)
+print('Thinking:\n' + response.message.thinking)
+print('Response:\n' + response.message.content)
+```
+
+#### Embeddings
+```python
+import ollama
+
+response = ollama.embed(
+    model='nomic-embed-text',
+    input='The quick brown fox jumps over the lazy dog.',
+)
+print(response.embeddings)
+```
+
+### JavaScript Official SDK
+
+#### Chat
+```javascript
+import ollama from 'ollama';
+
+const response = await ollama.chat({
+  model: 'gemma4:e2b',
+  messages: [{ role: 'user', content: 'Why is the sky blue?' }],
+});
+console.log(response.message.content);
+```
+
+#### Streaming
+```javascript
+import ollama from 'ollama';
+
+for await (const chunk of await ollama.chat({
+  model: 'gemma4:e2b',
+  messages: [{ role: 'user', content: 'Count to 10' }],
+  stream: true,
+})) {
+  process.stdout.write(chunk.message.content);
+}
+```
+
+#### Structured Outputs (Zod)
+```javascript
+import ollama from 'ollama';
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
+const Country = z.object({
+  name: z.string(),
+  capital: z.string(),
+  languages: z.array(z.string()),
+});
+
+const response = await ollama.chat({
+  model: 'gemma4:e2b',
+  messages: [{ role: 'user', content: 'Tell me about Canada.' }],
+  format: zodToJsonSchema(Country),
+});
+const country = Country.parse(JSON.parse(response.message.content));
+console.log(country);
+```
+
+#### Tool Calling
+```javascript
+import ollama from 'ollama';
+
+const addTool = {
+  type: 'function',
+  function: {
+    name: 'addTwoNumbers',
+    description: 'Add two numbers together',
+    parameters: {
+      type: 'object',
+      required: ['a', 'b'],
+      properties: {
+        a: { type: 'number', description: 'The first number' },
+        b: { type: 'number', description: 'The second number' },
+      },
+    },
+  },
+};
+
+for await (const chunk of await ollama.chat({
+  model: 'qwen3',
+  messages: [{ role: 'user', content: 'What is 2 plus 3?' }],
+  tools: [addTool],
+  stream: true,
+})) {
+  if (chunk.message.tool_calls) {
+    console.log('Tool call:', chunk.message.tool_calls);
+  } else {
+    process.stdout.write(chunk.message.content);
+  }
+}
+```
+
+#### Thinking
+```javascript
+import ollama from 'ollama';
+
+const response = await ollama.chat({
+  model: 'deepseek-r1',
+  messages: [{ role: 'user', content: 'What is 10 + 23?' }],
+  think: true,
+});
+console.log('Thinking:\n' + response.message.thinking);
+console.log('Response:\n' + response.message.content);
 ```
