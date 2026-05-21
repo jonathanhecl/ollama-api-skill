@@ -171,3 +171,16 @@ ollama list                  # List installed models
 # API status
 curl http://localhost:11434/api/version
 ```
+
+## Tips
+
+### Structured Outputs
+
+For reliable JSON schema responses:
+- Use **Pydantic** (Python) or **Zod** (JavaScript) to define and validate schemas.
+- Set `temperature=0` for deterministic output.
+- Add "return as JSON" to the prompt to help the model understand the request.
+
+### Streaming with Tool Calls
+
+Tool calls are supported in streaming mode (Ollama 0.6+). In a stream, tool calls arrive in a chunk where `message.tool_calls` is set and `message.content` is empty. Execute the tool, append the result as a `tool` role message, and call the model again.
