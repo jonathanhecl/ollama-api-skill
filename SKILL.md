@@ -1,5 +1,5 @@
 ---
-name: ollama
+name: ollama-api
 description: Ollama REST API integration, capability detection, model routing, and multimodal patterns for local AI agents. Use when building applications that interact with Ollama, detecting model capabilities, implementing chat with tools/vision/audio/embeddings, or streaming responses.
 ---
 
