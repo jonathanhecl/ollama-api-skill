@@ -32,6 +32,9 @@ Practical guidance for integrating with Ollama's REST API and building agents th
 | `/api/ps` | GET | Running models + memory usage |
 | `/api/chat` | POST | Chat completion (stream or sync) |
 | `/api/embed` | POST | Text embeddings |
+| `/api/create` | POST | Create a derived model |
+| `/api/pull` | POST | Download a model (NDJSON stream) |
+| `/api/delete` | DELETE | Remove a model |
 
 ### Capability States
 

@@ -247,6 +247,22 @@ Single-turn text generation. Supports the same parameters as `/api/chat` (tools,
 }
 ```
 
+#### Unload Pattern
+
+To force a model out of memory immediately, send an empty prompt to `/api/generate` with `keep_alive: 0`. Ollama will evict the model from RAM/VRAM without generating any tokens.
+
+**Request:**
+```json
+{
+  "model": "gemma4:e2b",
+  "prompt": "",
+  "stream": false,
+  "keep_alive": 0
+}
+```
+
+This is the only reliable way to free GPU memory for a specific model without waiting for the automatic timeout.
+
 ### POST /api/embed
 
 Generates text embeddings.
@@ -266,6 +282,73 @@ Generates text embeddings.
   "embeddings": [[0.023, -0.045, ...]]
 }
 ```
+
+### POST /api/create
+
+Creates a derived model from an existing one, overriding system prompt, template, or parameters without re-downloading weights.
+
+**Request:**
+```json
+{
+  "model": "qwen3:fixed",
+  "from": "qwen3:latest",
+  "system": "You are a helpful assistant. Reply concisely.",
+  "template": "{{ .System }}\nUser: {{ .Prompt }}\nAssistant:",
+  "parameters": {
+    "temperature": 0.3,
+    "num_ctx": 8192
+  },
+  "stream": false
+}
+```
+
+**Notes:**
+- `from` is the base model name. Alternatively, use `files` with a blob digest to reference a raw GGUF.
+- `modelfile` can be sent as a single string instead of the individual fields.
+- `renderer` and `parser` are optional Modelfile directives for advanced template pipelines.
+
+### POST /api/pull
+
+Downloads a model from the Ollama registry. When `stream: true`, the server returns NDJSON progress events.
+
+**Request:**
+```json
+{
+  "name": "gemma4:e2b",
+  "stream": true
+}
+```
+
+**Streamed event:**
+```json
+{
+  "status": "downloading digest",
+  "digest": "sha256:abc123...",
+  "total": 5311846400,
+  "completed": 1048576000
+}
+```
+
+**Fields:**
+- `status` — human-readable step (e.g., `pulling manifest`, `downloading digest`, `verifying digest`, `writing manifest`, `success`).
+- `digest` — blob SHA being transferred.
+- `total` / `completed` — bytes for this blob (absent for status-only events).
+- `error` — terminal error string if the pull fails.
+
+The final event is typically `{"status":"success"}`. Parse with a line-by-line JSON decoder and a large buffer (events can be wide).
+
+### DELETE /api/delete
+
+Removes a model and its associated blobs from local storage.
+
+**Request:**
+```json
+{
+  "name": "gemma4:e2b"
+}
+```
+
+**Response:** `200 OK` with an empty body on success. Returns `404` if the model is not found.
 
 ## Error Handling
 
