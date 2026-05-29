@@ -10,7 +10,7 @@ Practical guidance for integrating with Ollama's REST API and building agents th
 ## When to Use
 
 - Building an application that calls Ollama locally or remotely.
-- Detecting which capabilities a model supports (completion, tools, vision, audio, embeddings, thinking).
+- Detecting which capabilities a model supports (completion, tools, vision, audio, embeddings, thinking). See [`references/capabilities.md`](references/capabilities.md) and [`references/modelfile-capability-unlock.md`](references/modelfile-capability-unlock.md) for detection and repair.
 - Implementing chat with streaming, tool calling, structured outputs, or multimodal inputs.
 
 ## Quick Reference
@@ -38,7 +38,7 @@ Practical guidance for integrating with Ollama's REST API and building agents th
 
 ### Capability States
 
-Models report capabilities with three confidence levels:
+Models report capabilities with three confidence levels. For the full detection pipeline and how to unlock hidden capabilities, see [`references/capabilities.md`](references/capabilities.md) and [`references/modelfile-capability-unlock.md`](references/modelfile-capability-unlock.md).
 
 - **confirmed** — listed in `/api/show.capabilities` or verified end-to-end.
 - **inferred** — detected via `projector_info` (e.g., `clip.has_vision_encoder`) but not confirmed by the API.
@@ -105,6 +105,7 @@ Load these as needed:
 
 - **[`references/api-reference.md`](references/api-reference.md)** — Complete endpoint documentation: request/response schemas, streaming protocol, status codes, OpenAI compatibility.
 - **[`references/capabilities.md`](references/capabilities.md)** — How to detect model capabilities from `/api/show`, `model_info`, and `projector_info`; status taxonomy.
+- **[`references/modelfile-capability-unlock.md`](references/modelfile-capability-unlock.md)** — How Ollama detects capabilities, why some models only show `completion`, and how to unlock `tools`, `thinking`, `vision`, `audio`, and `embedding` via `PARSER`, `RENDERER`, and `TEMPLATE` directives.
 - **[`references/examples.md`](references/examples.md)** — Code snippets in cURL, Go, Python, and JavaScript/TypeScript (REST, OpenAI SDK, and official Ollama SDKs).
 - **[`references/cloud.md`](references/cloud.md)** — Cloud models, web search API, authentication, and IDE integrations.
 
