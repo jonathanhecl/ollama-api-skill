@@ -64,6 +64,8 @@ if builtinParser != nil && builtinParser.HasThinkingSupport() {
 
 **This is the most reliable signal** because it does not depend on the GGUF author adding metadata flags or the template referencing modern variables.
 
+> **Important distinction:** `PARSER` only adds the capability flag (e.g., `tools`). For some families, `RENDERER` is also required to actually enable automatic tool injection. The renderer intercepts the prompt before tokenization and formats it according to the model's native conventions — including injecting tool definitions and handling stop tokens. Families like **LFM2** and **Gemma 4** require both `PARSER` and `RENDERER` for full tool support.
+
 ---
 
 ## Unlock Strategies
@@ -152,8 +154,8 @@ The following table maps common architectures to built-in parsers. Use it to dec
 
 | Family | Architectures | Parser directive | Adds tools | Adds thinking | Notes |
 |--------|--------------|------------------|-----------|--------------|-------|
-| **LFM2 / LFM2MoE** | `lfm2`, `lfm2moe` | `lfm2-thinking` | Yes | Yes | Preserve exact Modelfile; template/stops contain invisible special tokens |
-| **LFM2 / LFM2MoE** | `lfm2`, `lfm2moe` | `lfm2` | Yes | No | Preserve exact Modelfile |
+| **LFM2 / LFM2MoE** | `lfm2`, `lfm2moe` | `lfm2-thinking` | Yes | Yes | With tools: `TEMPLATE {{ .Prompt }}` + `RENDERER`/`PARSER`. Without tools: preserve exact Modelfile |
+| **LFM2 / LFM2MoE** | `lfm2`, `lfm2moe` | `lfm2` | Yes | No | Preserve exact Modelfile; only prepend `PARSER` |
 | **Qwen 3.5** | `qwen3.5`, `qwen35`, `qwen35moe` | `qwen3.5` | Yes | Yes | Replace template with `.Messages` + `.Tools` / `.Thinking` for full API integration |
 | **Gemma 4** | `gemma4` | `gemma4` | Yes | Yes | Use `RENDERER gemma4` + `PARSER gemma4`; renderer handles stops internally |
 | **Gemma 3** | `gemma3` | `gemma3` | Yes | No | Replace template with Gemma 3 chat format |
@@ -166,8 +168,17 @@ The following table maps common architectures to built-in parsers. Use it to dec
 
 - **Native formats:** Thinking uses `<thinking>` ... `</thinking>`; tool calls use `<|tool_call_start|>[function_name(arg=value)]`.
 - **Why it fails:** The GGUF lacks tool/thinking metadata, and the default template uses legacy variables (`.System` / `.Prompt` / `.Response`).
-- **Repair:** Run `ollama show <model>` to extract the exact Modelfile, then programmatically prepend `PARSER lfm2-thinking`. **Do not regenerate the template or stop parameters** — they contain special invisible token characters.
-- **After fix:** `thinking` works perfectly (Ollama strips tags and populates `message.thinking`). `tools` is detected, but because the legacy template cannot render `.Tools`, automatic injection does not happen. The model still generates native tool calls when tool definitions are passed manually in the system prompt.
+- **Repair — when `tools` is needed:** Use the official approach that matches Ollama's built-in `lfm2.5-thinking` model:
+  - `TEMPLATE {{ .Prompt }}`
+  - `RENDERER lfm2-thinking`
+  - `PARSER lfm2-thinking`
+  The `lfm2-thinking` renderer is a Go component that intercepts the prompt before tokenization and handles **all** formatting internally: message history, tool definition injection, and stop tokens. Without the renderer, the generic template engine cannot produce the correct LFM2 tool format.
+  - Optionally inject a specialized `SYSTEM` prompt that teaches the model the native tool output format and that tool definitions will be provided as a JSON array.
+- **Repair — when `tools` is NOT needed:** Preserve the **exact original Modelfile** (template and stop parameters contain invisible special token characters) and only prepend `PARSER lfm2-thinking`.
+- **After fix:**
+  - `thinking`: Works perfectly. Ollama strips thinking tags from `content` and populates `message.thinking`.
+  - `tools` **with renderer**: The model generates native tool calls (e.g., `<|tool_call_start|>[get_weather(city="Buenos Aires")]`) and Ollama returns them as proper `tool_calls` in the API response.
+  - `tools` **without renderer**: The capability is detected, but automatic injection does not happen. Tool definitions must be passed manually in the system prompt.
 
 #### Qwen 3.5
 
@@ -191,15 +202,17 @@ When you encounter a model that only shows `completion`:
 
 1. **Inspect architecture:** Run `ollama show <model>` and read `general.architecture` inside `model_info`.
 2. **Check parser availability:** Look up the architecture in the Known Parser Families table above.
-3. **If a parser exists:** Use Strategy A (add `PARSER`). This is the safest and most reliable approach.
+3. **If a parser exists:** Use Strategy A (add `PARSER`). If the family is known to require a renderer for tool injection (e.g., LFM2, Gemma 4), add `RENDERER` as well.
 4. **If no parser exists:** Use Strategy B (rewrite template). Test thoroughly for regressions.
 5. **If you are the publisher:** Use Strategy C (fix GGUF metadata) for the most correct long-term solution.
 
 ### Golden Rules
 
-- For families with invisible or special token characters in their template/stops (e.g., LFM2): **always preserve the exact original Modelfile and only inject the `PARSER` directive**.
+- For families with invisible or special token characters in their template/stops (e.g., LFM2):
+  - **If tools are NOT needed:** preserve the exact original Modelfile and only inject `PARSER`.
+  - **If tools ARE needed:** use `TEMPLATE {{ .Prompt }}` + `RENDERER lfm2-thinking` + `PARSER lfm2-thinking`. The renderer handles all formatting and tool injection internally; preserving the original template will block automatic tool injection.
 - For families with standard, well-documented templates (e.g., Qwen 3.5): **replace the template with the modern format** to gain full Ollama API integration.
-- Never mix a legacy template with a parser that expects modern output unless you know the parser handles both.
+- Never mix a legacy template with a parser/renderer that expects modern output unless you know the renderer handles both.
 
 ---
 
@@ -208,7 +221,7 @@ When you encounter a model that only shows `completion`:
 | Directive | Purpose |
 |-----------|---------|
 | `PARSER <name>` | Selects a built-in parser that declares tool/thinking support |
-| `RENDERER <name>` | Selects a built-in renderer; often paired with `PARSER` for families like Gemma 4 |
+| `RENDERER <name>` | Selects a built-in renderer that intercepts the prompt before tokenization and handles formatting, tool injection, and stop tokens internally. Required for full tool support on families like LFM2 and Gemma 4. |
 | `TEMPLATE` ... | Defines the prompt template; modern templates reference `.Messages`, `.Tools`, `.Thinking` |
 | `PARAMETER stop ...` | Defines stop sequences; preserve exactly for models with special tokens |
 
