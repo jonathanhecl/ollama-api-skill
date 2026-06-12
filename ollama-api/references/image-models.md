@@ -80,14 +80,16 @@ These parameters must be placed inside the `"options"` object:
 
 ---
 
-## 3. Streaming SSE Response Format
+## 3. Streaming Response Format
+
+The response format depends on which endpoint is used:
+
+### A. `/api/chat` (via ollama-manager proxy) - SSE Format
 
 The server responds with a Server-Sent Events stream (`text/event-stream`). Events are newline-delimited (`\n\n`) and contain structured JSON payloads.
 
-### SSE Events
-
-#### A. Step Progress Event (`event: chunk`)
-During image generation, the model reports its step progress periodically. These chunks contain `completed` and `total` step counts:
+#### Step Progress Event (`event: chunk`)
+During image generation, the model reports its step progress periodically:
 
 ```http
 event: chunk
@@ -97,39 +99,82 @@ event: chunk
 data: {"model":"x/flux2-klein:4b","completed":2,"total":4,"done":false}
 ```
 
-* **`completed`**: The index of the generation step currently finished.
-* **`total`**: The total configured inference steps (`steps`).
-
-#### B. Final Content Event (`event: chunk`)
-When the diffusion process completes, the final `chunk` event contains the generated image payload as a Base64-encoded PNG/JPEG string in the message content:
+#### Final Content Event (`event: chunk`)
+When complete, the image is delivered as a Base64-encoded PNG in `message.content`:
 
 ```http
 event: chunk
-data: {"model":"x/flux2-klein:4b","message":{"role":"assistant","content":"iVBORw0KGgoAAAANS... (large_base64_image_bytes)"},"done":false}
+data: {"model":"x/flux2-klein:4b","message":{"role":"assistant","content":"iVBORw0KGgoAAAANS..."},"done":false}
 ```
 
-#### C. Completion Event (`event: done`)
-Sent at the very end to provide execution metrics and token stats:
-
+#### Completion Event (`event: done`)
 ```http
 event: done
-data: {"elapsed_ms":12450,"prompt_tokens":0,"completion_tokens":0,"total_tokens":0,"prompt_duration_ns":0,"eval_duration_ns":0,"total_duration_ns":12450000000}
+data: {"elapsed_ms":12450,"total_tokens":0,"total_duration_ns":12450000000}
 ```
 
-#### D. Error Event (`event: error`)
-Sent if a failure occurs (e.g., model not found or out of VRAM):
+### B. `/api/generate` (Direct Ollama API) - NDJSON Format
 
-```http
-event: error
-data: {"error":"ollama: model out of memory"}
+Ollama's native `/api/generate` returns newline-delimited JSON (NDJSON) with a different payload structure:
+
+#### Step Progress Chunks
+```json
+{"model":"x/flux2-klein:4b","created_at":"...","response":"","done":false,"completed":1,"total":4}
 ```
+
+#### Final Image Chunk
+**The generated image is delivered in the `image` field (not `response` or `message.content`):**
+
+```json
+{"model":"x/flux2-klein:4b","created_at":"...","response":"","done":true,"done_reason":"stop","image":"iVBORw0KGgoAAAANS... (base64-encoded PNG)","total_duration":...}
+```
+
+* **`image`**: Base64-encoded PNG/JPEG of the generated image (string, not array)
+* **`response`**: Always empty for diffusion models
+* **`done`**: `true` on the final chunk containing the image
 
 ---
 
 ## 4. Example: Querying and Saving via cURL
 
-### Generating an Image
-To request an image directly using `curl`, you can send the request and parse the output. Here is how to make the API call and output the resulting base64 response directly.
+### Generating an Image via /api/generate (Direct)
+When calling Ollama directly, use `/api/generate`. The image is returned in the `image` field of the final NDJSON chunk:
+
+```bash
+curl -s -X POST http://127.0.0.1:11434/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "x/flux2-klein:4b",
+    "prompt": "A mystical forest at sunrise",
+    "stream": true,
+    "options": {
+      "width": 512,
+      "height": 512,
+      "steps": 4,
+      "seed": 42
+    }
+  }' > output.ndjson
+```
+
+Extract the image from the final line (the one with `"done":true`):
+
+```bash
+# Extract the image field from the final chunk
+jq -r 'select(.done == true) | .image' output.ndjson | base64 -d > output.png
+```
+
+Or in JavaScript:
+
+```javascript
+const fs = require('fs');
+const lines = fs.readFileSync('output.ndjson', 'utf8').trim().split('\n');
+const finalChunk = JSON.parse(lines[lines.length - 1]);
+const base64Image = finalChunk.image; // Note: field is "image", not "response"
+fs.writeFileSync('output.png', Buffer.from(base64Image, 'base64'));
+```
+
+### Generating an Image via /api/chat (Proxy)
+When using ollama-manager's proxy, the response is SSE and the image is in `message.content`:
 
 ```bash
 curl -s -X POST http://127.0.0.1:7860/api/chat \
@@ -145,10 +190,9 @@ curl -s -X POST http://127.0.0.1:7860/api/chat \
   }'
 ```
 
-Because the output is streamed as SSE, parsing it requires extracting the `content` field from the final chunk of the SSE stream and decoding the base64 string to a file:
+Parse the SSE stream to extract the base64 image from the final `event: chunk`:
 
 ```javascript
-// Example Node.js extraction snippet
 const responseText = "..."; // SSE stream response accumulated
 const chunkJson = JSON.parse(responseText.match(/event: chunk\ndata: (\{.*?\})/g).pop().replace("event: chunk\ndata: ", ""));
 const base64Image = chunkJson.message.content; 
