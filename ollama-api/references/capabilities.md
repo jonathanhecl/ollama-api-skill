@@ -23,6 +23,7 @@ Known capability strings observed in the wild:
 - `embedding`
 - `audio`
 - `video` (rare; usually pending)
+- `image` (for diffusion-based image generation/image creator)
 
 These are treated as **confirmed**.
 
@@ -87,9 +88,11 @@ Capabilities reported by `/api/show` can still fail with real prompts. Recommend
 | vision | Send a base64 image; expect non-empty description. |
 | embeddings | Call `/api/embed`; expect non-empty vector. |
 | audio | Send a base64 **WAV** audio file; expect non-empty description. Treat as experimental; some models crash the runner. |
+| image | Send a text prompt; expect base64 PNG/JPEG image content in the response stream. |
 
 ## Pitfalls
 
 - Some models report `audio` in `capabilities` but crash on real audio payloads. Always probe before trusting.
 - `video` is not yet natively supported. A practical fallback is frame extraction + vision model.
 - Context length from `model_info` is the *architecture* limit. The *live* limit may differ; check `context_length` in `/api/ps` for loaded models.
+- Diffusion models (e.g., `Flux`) using Apple's MLX runner are not compatible with Windows or Linux due to lack of native MLX runner dynamic libraries, resulting in a `500 Internal Server Error`. Probes and runs should only be attempted on Apple Silicon (macOS) devices.

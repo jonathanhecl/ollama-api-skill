@@ -108,6 +108,12 @@ Use this to check if a model is loaded, how much VRAM/RAM it uses (`size_vram`),
 
 Chat completion. Supports text, images, audio (WAV, base64), tools, structured output, and thinking.
 
+> [!NOTE]
+> **Diffusion / Image Generation Models:** Raw Ollama diffusion models (e.g. `Flux`) do not support standard chat payloads (`/api/chat`) and will reject them with a `400 Bad Request` error.
+> 
+> However, `ollama-manager` automatically redirects `/api/chat` requests to Ollama's `/api/generate` endpoint when it detects a model with the `image` capability, converting the prompt/parameters and translating the output back to SSE chunk events on the fly.
+> For details on payload structure, options (e.g. `width`, `height`, `steps`, `seed`), response events, and platform limitations, see [`image-models.md`](image-models.md).
+
 **Non-streaming request:**
 ```json
 {
