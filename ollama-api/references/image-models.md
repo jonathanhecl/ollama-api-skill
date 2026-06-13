@@ -42,7 +42,9 @@ Send a `POST` request to `/api/chat`. By default, this endpoint streams SSE (Ser
   "width": 512,
   "height": 512,
   "steps": 4,
-  "seed": 42
+  "options": {
+    "seed": 42
+  }
 }
 ```
 
@@ -70,11 +72,11 @@ To modify or perform variations of an existing image, include a base64-encoded s
 > **⚠️ Known Issue:** Image-to-Image is currently broken in Ollama 0.15.4+. The input image is ignored and a completely new image is generated instead. See [ollama/ollama#14306](https://github.com/ollama/ollama/issues/14306).
 
 ### Image Generation Parameters
-These parameters must be placed at the **root level** of the request payload (not inside `"options"`):
-* **`width`**: (Integer) Width of the output image in pixels. Supported range is `16` to `1024`.
-* **`height`**: (Integer) Height of the output image in pixels. Supported range is `16` to `1024`.
-* **`steps`**: (Integer) Inference steps. For accelerated/Turbo models, values between `4` and `8` are recommended. For standard models, use `20` to `30`.
-* **`seed`**: (Integer) Random seed. If omitted or set to `0`, a random seed is selected for every new generation.
+Parameter placement depends on the field. Tested against Ollama 0.15.x with `x/flux2-klein:4b`:
+
+* **`width`** / **`height`**: (Integer) Must be placed at the **root level** of the payload. Supported range is `16` to `1024`. Default: `1024`
+* **`steps`**: (Integer) Must be placed at the **root level** of the payload. For accelerated/Turbo models, values between `4` and `8` are recommended. For standard models, use `20` to `30`.  Default: `4`
+* **`seed`**: (Integer) Must be placed inside **`"options"`** to produce deterministic output. If omitted or set to `0`, a random seed is selected for every new generation.  Default: `0`
 
 ---
 
@@ -148,7 +150,9 @@ curl -s -X POST http://127.0.0.1:11434/api/generate \
     "width": 512,
     "height": 512,
     "steps": 4,
-    "seed": 42
+    "options": {
+      "seed": 42
+    }
   }' > output.ndjson
 ```
 
