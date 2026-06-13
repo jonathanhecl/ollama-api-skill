@@ -67,6 +67,8 @@ To modify or perform variations of an existing image, include a base64-encoded s
 }
 ```
 
+> **⚠️ Known Issue:** Image-to-Image is currently broken in Ollama 0.15.4+. The input image is ignored and a completely new image is generated instead. See [ollama/ollama#14306](https://github.com/ollama/ollama/issues/14306).
+
 ### Image Generation Parameters
 These parameters must be placed at the **root level** of the request payload (not inside `"options"`):
 * **`width`**: (Integer) Width of the output image in pixels. Supported range is `16` to `1024`.
@@ -166,6 +168,32 @@ const finalChunk = JSON.parse(lines[lines.length - 1]);
 const base64Image = finalChunk.image; // Note: field is "image", not "response"
 fs.writeFileSync('output.png', Buffer.from(base64Image, 'base64'));
 ```
+
+### Image-to-Image via /api/generate (Direct)
+To transform an existing image, pass it as a base64-encoded string in the `"images"` array at the **root level** of the payload:
+
+```bash
+curl -s -X POST http://127.0.0.1:11434/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "x/flux2-klein:4b",
+    "prompt": "Make it 3D cartoon style, smooth rendering, cute vivid style",
+    "images": [
+      "$(base64 -w 0 input.png)"
+    ],
+    "width": 512,
+    "height": 512,
+    "steps": 8
+  }' > output.ndjson
+```
+
+* **`images`**: Must be an array of base64-encoded image strings placed at the **root level**, not inside `"options"` or `"messages"`.
+
+> **⚠️ Known Issue: Image-to-Image is broken since Ollama 0.15.4**
+>
+> The `images` parameter is accepted by the API, but the model ignores the input image and generates a completely unrelated image instead. This is a confirmed upstream bug in Ollama. Track the issue at [ollama/ollama#14306](https://github.com/ollama/ollama/issues/14306).
+>
+> **Workaround:** Use the model for text-to-image generation only, or use an alternative tool (e.g. Stable Diffusion WebUI, ComfyUI, or diffusers pipeline) if you need controlled image-to-image transformations.
 
 ### Generating an Image via /api/chat (Proxy)
 When using ollama-manager's proxy, the response is SSE and the image is in `message.content`:
