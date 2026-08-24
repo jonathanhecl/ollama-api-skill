@@ -212,14 +212,23 @@ Pass a JSON schema or `"json"` in the `format` field:
 
 #### Thinking
 
-Models that support thinking (e.g., `deepseek-r1`, `qwen3`) separate reasoning from final output. Pass `"think": true` to enable it.
+Models that support thinking (e.g., `deepseek-r1`, `qwen3`, `gpt-oss`) separate reasoning from final output. The `think` field controls it and accepts **booleans or string levels**:
+
+| Value | Effect |
+|-------|--------|
+| `false` | Disables thinking; model outputs content directly. |
+| `true` | Enables thinking at the model's default level. |
+| `"low"` | Short reasoning trace. |
+| `"medium"` | Moderate reasoning trace. |
+| `"high"` | Long reasoning trace. |
+| `"max"` | Highest thinking level available. |
 
 **Request:**
 ```json
 {
   "model": "deepseek-r1",
   "messages": [{"role": "user", "content": "how many r in strawberry?"}],
-  "think": true,
+  "think": "medium",
   "stream": false
 }
 ```
@@ -237,9 +246,13 @@ Models that support thinking (e.g., `deepseek-r1`, `qwen3`) separate reasoning f
 }
 ```
 
-- `think: false` — disables thinking; model outputs content directly.
-- `think: true` — enables thinking; both `message.thinking` and `message.content` are returned.
-- Supported models: `deepseek-r1`, `qwen3`, and others tagged with `thinking` capability.
+- When thinking is enabled, both `message.thinking` and `message.content` are returned.
+- **GPT-OSS exception:** requires a level (`"low"`, `"medium"`, or `"high"`); booleans are ignored and its trace cannot be fully disabled.
+- Thinking is enabled by default for supported models.
+- Supported models: `deepseek-r1`, `qwen3`, `gpt-oss`, `deepseek-v3.1`, and others tagged with `thinking` capability.
+
+> [!NOTE]
+> **ollama-manager:** when proxying to external OpenAI-compatible providers, it maps these levels to provider-specific fields — `reasoning_effort` (`none`/`low`/`medium`/`high`), `chat_template_kwargs.reasoning_effort` (`"xhigh"` for `max`), and a `thinking.budget_tokens` budget (2048 / 8192 / 24576 / 65536 for low/medium/high/max).
 
 ### POST /api/generate
 

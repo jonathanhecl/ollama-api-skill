@@ -407,7 +407,7 @@ import ollama
 response = ollama.chat(
     model='deepseek-r1',
     messages=[{'role': 'user', 'content': 'What is 10 + 23?'}],
-    think=True,
+    think=True,  # or a level: 'low', 'medium', 'high', 'max'
 )
 print('Thinking:\n' + response.message.thinking)
 print('Response:\n' + response.message.content)
@@ -512,7 +512,7 @@ import ollama from 'ollama';
 const response = await ollama.chat({
   model: 'deepseek-r1',
   messages: [{ role: 'user', content: 'What is 10 + 23?' }],
-  think: true,
+  think: true, // or a level: 'low', 'medium', 'high', 'max'
 });
 console.log('Thinking:\n' + response.message.thinking);
 console.log('Response:\n' + response.message.content);
