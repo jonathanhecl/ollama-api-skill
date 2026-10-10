@@ -109,10 +109,7 @@ Use this to check if a model is loaded, how much VRAM/RAM it uses (`size_vram`),
 Chat completion. Supports text, images, audio (WAV, base64), tools, structured output, and thinking.
 
 > [!NOTE]
-> **Diffusion / Image Generation Models:** Raw Ollama diffusion models (e.g. `Flux`) do not support standard chat payloads (`/api/chat`) and will reject them with a `400 Bad Request` error.
-> 
-> However, `ollama-manager` automatically redirects `/api/chat` requests to Ollama's `/api/generate` endpoint when it detects a model with the `image` capability, converting the prompt/parameters and translating the output back to SSE chunk events on the fly.
-> For details on payload structure, options (e.g. `width`, `height`, `steps`, `seed`), response events, and platform limitations, see [`image-models.md`](image-models.md).
+> **Image understanding is not image generation.** Vision-enabled chat accepts input images and returns text. The upstream `/api/generate` handler reviewed on 2026-10-10 rejects image-generation models; do not assume `/api/chat` redirects diffusion requests or returns generated image bytes. See [image models](image-models.md) for version and runner compatibility.
 
 **Non-streaming request:**
 ```json
@@ -251,9 +248,6 @@ Models that support thinking (e.g., `deepseek-r1`, `qwen3`, `gpt-oss`) separate 
 - Thinking is enabled by default for supported models.
 - Supported models: `deepseek-r1`, `qwen3`, `gpt-oss`, `deepseek-v3.1`, and others tagged with `thinking` capability.
 
-> [!NOTE]
-> **ollama-manager:** when proxying to external OpenAI-compatible providers, it maps these levels to provider-specific fields — `reasoning_effort` (`none`/`low`/`medium`/`high`), `chat_template_kwargs.reasoning_effort` (`"xhigh"` for `max`), and a `thinking.budget_tokens` budget (2048 / 8192 / 24576 / 65536 for low/medium/high/max).
-
 ### POST /api/generate
 
 Single-turn text generation. Supports the same parameters as `/api/chat` (tools, format, think, stream, images, etc.).
@@ -284,7 +278,9 @@ This is the only reliable way to free GPU memory for a specific model without wa
 
 ### POST /api/embed
 
-Generates text embeddings.
+Generates vector embeddings. `input` accepts a string or text batch; the upstream API types and handler reviewed on 2026-10-10 also accept a single object or mixed batch with singular `text`, `image`, and/or `audio` fields, with raw base64 media. This newer media contract requires a supporting installed release, model, and runner; the public text-only schema does not establish support on every runtime. See [multimodal embeddings](multimodal-embeddings.md).
+
+The native response is `embeddings`, an array of vectors in input order. `truncate`, `dimensions`, `keep_alive`, and `options` are embedding request fields; validate runtime/model support and returned dimensions. Legacy `/api/embeddings` uses `prompt` and returns singular `embedding`, not an equivalent multimodal fallback.
 
 **Request:**
 ```json
@@ -301,6 +297,14 @@ Generates text embeddings.
   "embeddings": [[0.023, -0.045, ...]]
 }
 ```
+
+### POST /v1/systemone (decision models)
+
+Ollama-specific, local, non-streaming decision API (v0.35.0+; Clef vision v0.35.1+). Send `model`, `state`, and `questions` keyed by unique names; optional top-level `images` contains raw base64 PNG/JPEG/WebP for a vision-capable decision model. Each question has `type` (`choice`, `noul`, or `score`), `instructions`, and type-specific `criteria`.
+
+The response contains `model`, `answers`, and token `usage`, not `message.content` or a chat stream. `noul` is a probability of true, and `score` is the probability-weighted average of zero-based levels. See [decision models](decision-models.md) for full examples and interpretation.
+
+The native API accepts 1–64 named questions. Requests are limited to 64 KiB without images or 32 MiB with images; input is not truncated. Local compatible GGUF weights and a scoring-capable runner are required. Cloud and MLX/Safetensors models, streaming, video, tools, and generation controls are unsupported. Measure request latency in the client; the documented response has token usage but no isolated load/evaluation timing. See the [official System One reference](https://docs.ollama.com/api/systemone) for complete request limits and model-specific criteria bounds.
 
 ### POST /api/create
 

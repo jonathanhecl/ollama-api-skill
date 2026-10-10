@@ -1,6 +1,6 @@
 ---
 name: ollama-api
-description: Ollama REST API integration, capability detection, model routing, and multimodal patterns for local AI agents. Use when building applications that interact with Ollama, detecting model capabilities, implementing chat with tools/vision/audio/embeddings, or streaming responses.
+description: Ollama REST API integration, capability detection, model routing, multimodal image/audio embeddings, and decision models (System One) for local AI agents. Use when building applications that interact with Ollama, detecting model capabilities, implementing chat with tools/vision/audio/embeddings, calling /v1/systemone, or streaming responses.
 ---
 
 # Ollama Skill
@@ -12,6 +12,7 @@ Practical guidance for integrating with Ollama's REST API and building agents th
 - Building an application that calls Ollama locally or remotely.
 - Detecting which capabilities a model supports (completion, tools, vision, audio, embeddings, thinking, image). See [`references/capabilities.md`](references/capabilities.md) and [`references/modelfile-capability-unlock.md`](references/modelfile-capability-unlock.md) for detection and repair.
 - Implementing chat with streaming, tool calling, structured outputs, multimodal inputs, or image generation. See [`references/image-models.md`](references/image-models.md) for diffusion-based models.
+- Implementing image/audio embeddings or decision-only model workflows. See [`references/multimodal-embeddings.md`](references/multimodal-embeddings.md) and [`references/decision-models.md`](references/decision-models.md).
 
 ## Quick Reference
 
@@ -31,7 +32,8 @@ Practical guidance for integrating with Ollama's REST API and building agents th
 | `/api/show` | POST | Model metadata + capabilities |
 | `/api/ps` | GET | Running models + memory usage |
 | `/api/chat` | POST | Chat completion (stream or sync) |
-| `/api/embed` | POST | Text embeddings |
+| `/api/embed` | POST | Text or supported multimodal embeddings |
+| `/v1/systemone` | POST | Decision probabilities, classification, and scoring |
 | `/api/create` | POST | Create a derived model |
 | `/api/pull` | POST | Download a model (NDJSON stream) |
 | `/api/delete` | DELETE | Remove a model |
@@ -43,6 +45,13 @@ Models report capabilities with three confidence levels. For the full detection 
 - **confirmed** — listed in `/api/show.capabilities` or verified end-to-end.
 - **inferred** — detected via `projector_info` (e.g., `clip.has_vision_encoder`) but not confirmed by the API.
 - **pending** — unknown; requires a probe or is unsupported.
+
+### Route by task, not by attachment alone
+
+- `embedding` without `completion`: use `/api/embed`; optional image/audio inputs require verified modality support. Do not route a vision-capable embedder through chat.
+- `decision` without `completion`: use `/v1/systemone`; read `answers`, not assistant text.
+- `completion`: use chat/generate as appropriate; `vision`, `audio`, `tools`, and `thinking` are additional task-specific capabilities.
+- A declared capability is not an end-to-end execution result. Preserve declared modalities for native multimodal/embedding models without `projector_info`, and probe the exact model/runtime before trusting media support.
 
 ## Quick Reference
 
@@ -105,10 +114,12 @@ Load these as needed:
 
 - **[`references/api-reference.md`](references/api-reference.md)** — Complete endpoint documentation: request/response schemas, streaming protocol, status codes, OpenAI compatibility.
 - **[`references/capabilities.md`](references/capabilities.md)** — How to detect model capabilities from `/api/show`, `model_info`, and `projector_info`; status taxonomy.
-- **[`references/image-models.md`](references/image-models.md)** — Diffusion-based image generation: redirection, payloads, streaming SSE format, OS compatibility, and examples.
+- **[`references/image-models.md`](references/image-models.md)** — Image understanding vs generation, native REST compatibility, runtime/version checks, and runner/platform requirements.
 - **[`references/modelfile-capability-unlock.md`](references/modelfile-capability-unlock.md)** — How Ollama detects capabilities, why some models only show `completion`, and how to unlock `tools`, `thinking`, `vision`, `audio`, and `embedding` via `PARSER`, `RENDERER`, and `TEMPLATE` directives.
 - **[`references/examples.md`](references/examples.md)** — Code snippets in cURL, Go, Python, and JavaScript/TypeScript (REST, OpenAI SDK, and official Ollama SDKs).
 - **[`references/cloud.md`](references/cloud.md)** — Cloud models, web search API, authentication, and IDE integrations.
+- **[`references/multimodal-embeddings.md`](references/multimodal-embeddings.md)** — Native image/audio embedding payloads, EmbeddingGemma 2 variants, projector caveats, RAG representation policies, and runtime validation.
+- **[`references/decision-models.md`](references/decision-models.md)** — Native System One endpoints, choice/noul/score contracts, image decisions, model/runtime limits, and latency/usage interpretation.
 
 ## Troubleshooting
 

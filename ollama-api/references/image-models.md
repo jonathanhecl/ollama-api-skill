@@ -1,247 +1,49 @@
-# REST API Guide: Using Image Generation Models (Diffusion)
+# Image Models and Native Ollama Compatibility
 
-This guide explains how to programmatically interact with diffusion-based image generation models (such as Flux or Z-Image-Turbo) using the `ollama-manager` REST API.
+Ollama-only guidance reviewed on 2026-10-10 against upstream API types and endpoint implementation. Image understanding and image generation are different tasks. Experimental image-generation packages or historical runner behavior must not be presented as a stable native REST contract.
 
----
+## Image understanding
 
-## 1. Transparent `/api/chat` to `/api/generate` Redirection
-
-Ollama's diffusion models (like `Flux`) do not support standard chat payloads (`/api/chat`) and will reject them with a `400 Bad Request` error. 
-
-To resolve this while maintaining a uniform API footprint, **`ollama-manager` automatically redirects requests sent to `/api/chat` to Ollama's `/api/generate` endpoint** if it detects that the model has the `image` capability. 
-
-### How it works:
-1. When you request `/api/chat`, the server queries the model capabilities.
-2. If the model has `image` capability, the server extracts the last user message text as the prompt and any attached image base64 elements.
-3. The server queries Ollama's `/api/generate` endpoint using the extracted prompt and images.
-4. The output NDJSON stream from `/api/generate` is translated back to standard SSE chat chunk payloads (`event: chunk`) on the fly, allowing clients to consume it without any modifications.
-
----
-
-## 2. API Request Payload Structure
-
-Send a `POST` request to `/api/chat`. By default, this endpoint streams SSE (Server-Sent Events) back to the client.
-
-* **Method:** `POST`
-* **Path:** `/api/chat`
-* **Headers:** 
-  * `Content-Type: application/json`
-  * `Cookie: <session_token>` (if password authentication is enabled)
-
-### Text-to-Image (Txt2Img) Request Payload
+A model with `vision` plus a suitable completion capability can analyze supplied images using `/api/chat` or `/api/generate`. Images are input; the response is text, not a generated picture.
 
 ```json
 {
-  "model": "x/flux2-klein:4b",
+  "model": "gemma4:e2b",
   "messages": [
     {
       "role": "user",
-      "content": "A high-tech cyberpunk cat wearing neon sunglasses, detailed digital art"
+      "content": "Describe the attached image.",
+      "images": ["<raw-base64-image-bytes>"]
     }
   ],
-  "width": 512,
-  "height": 512,
-  "steps": 4,
-  "options": {
-    "seed": 42
-  }
+  "stream": false
 }
 ```
 
-### Image-to-Image (Img2Img) / Image Editing Request Payload
-To modify or perform variations of an existing image, include a base64-encoded string representing the source image in the `"images"` array of the user message.
+Send this to `POST /api/chat`, replacing the placeholder with actual image bytes encoded as base64 and selecting a verified vision-capable installed tag. Native streaming uses NDJSON, not SSE. For `/api/generate`, use `prompt` and top-level `images`, not `messages`.
+
+Image embeddings use `/api/embed` and singular `input.image` or `input[].image` fields on supporting runtimes; see [multimodal embeddings](multimodal-embeddings.md). Image decisions use `/v1/systemone` with top-level `images`; see [decision models](decision-models.md). These endpoints produce vectors or decisions, not pictures.
+
+## Image generation is version-dependent
+
+In the upstream `GenerateHandler` reviewed on 2026-10-10, a model declaring `image` is rejected with HTTP 400:
 
 ```json
-{
-  "model": "x/flux2-klein:4b",
-  "messages": [
-    {
-      "role": "user",
-      "content": "Transform this picture into a starry night van gogh oil painting style",
-      "images": [
-        "iVBORw0KGgoAAAANS... (base64_encoded_source_image_bytes)"
-      ]
-    }
-  ],
-  "width": 512,
-  "height": 512,
-  "steps": 8
-}
+{"error":"image generation models are not currently supported"}
 ```
 
-> **⚠️ Known Issue:** Image-to-Image is currently broken in Ollama 0.15.4+. The input image is ignored and a completely new image is generated instead. See [ollama/ollama#14306](https://github.com/ollama/ollama/issues/14306).
+The reviewed native `GenerateRequest`/`GenerateResponse` do not define a stable diffusion request with `width`, `height`, and `steps`, or a generated base64 `image` response field. Do not assume `/api/chat` redirects to another endpoint, accepts a diffusion model, or returns a generated image in `message.content`. Likewise, `/api/generate` must not be advertised as a working image-generation endpoint for every Ollama version.
 
-### Image Generation Parameters
-Parameter placement depends on the field. Tested against Ollama 0.15.x with `x/flux2-klein:4b`:
+Before using an experimental or older image-generation build, inspect `/api/version` and the documentation/source for that exact version and runner. Establish the actual request, response, and platform contract before integrating; do not transplant an experimental contract into the standard API. A model tag or `image` metadata alone does not prove a public inference endpoint supports generation.
 
-* **`width`** / **`height`**: (Integer) Must be placed at the **root level** of the payload. Supported range is `16` to `1024`. Default: `1024`
-* **`steps`**: (Integer) Must be placed at the **root level** of the payload. For accelerated/Turbo models, values between `4` and `8` are recommended. For standard models, use `20` to `30`.  Default: `4`
-* **`seed`**: (Integer) Must be placed inside **`"options"`** to produce deterministic output. If omitted or set to `0`, a random seed is selected for every new generation.  Default: `0`
+## Runner and platform checks
 
----
+A package requiring Apple's MLX backend needs a compatible Apple Silicon/macOS environment. That restriction belongs to that runner/package, not every vision or image-related Ollama model. GGUF vision models can use different runners/platforms. Review the exact model and runner requirements before downloading or invoking it.
 
-## 3. Streaming Response Format
+If an API returns an MLX initialization or unsupported-model error, preserve the error and explain the missing runtime/platform support. Do not fabricate image bytes or treat an input image as a generated output.
 
-The response format depends on which endpoint is used:
+## Official sources
 
-### A. `/api/chat` (via ollama-manager proxy) - SSE Format
-
-The server responds with a Server-Sent Events stream (`text/event-stream`). Events are newline-delimited (`\n\n`) and contain structured JSON payloads.
-
-#### Step Progress Event (`event: chunk`)
-During image generation, the model reports its step progress periodically:
-
-```http
-event: chunk
-data: {"model":"x/flux2-klein:4b","completed":1,"total":4,"done":false}
-
-event: chunk
-data: {"model":"x/flux2-klein:4b","completed":2,"total":4,"done":false}
-```
-
-#### Final Content Event (`event: chunk`)
-When complete, the image is delivered as a Base64-encoded PNG in `message.content`:
-
-```http
-event: chunk
-data: {"model":"x/flux2-klein:4b","message":{"role":"assistant","content":"iVBORw0KGgoAAAANS..."},"done":false}
-```
-
-#### Completion Event (`event: done`)
-```http
-event: done
-data: {"elapsed_ms":12450,"total_tokens":0,"total_duration_ns":12450000000}
-```
-
-### B. `/api/generate` (Direct Ollama API) - NDJSON Format
-
-Ollama's native `/api/generate` returns newline-delimited JSON (NDJSON) with a different payload structure:
-
-#### Step Progress Chunks
-```json
-{"model":"x/flux2-klein:4b","created_at":"...","response":"","done":false,"completed":1,"total":4}
-```
-
-#### Final Image Chunk
-**The generated image is delivered in the `image` field (not `response` or `message.content`):**
-
-```json
-{"model":"x/flux2-klein:4b","created_at":"...","response":"","done":true,"done_reason":"stop","image":"iVBORw0KGgoAAAANS... (base64-encoded PNG)","total_duration":...}
-```
-
-* **`image`**: Base64-encoded PNG/JPEG of the generated image (string, not array)
-* **`response`**: Always empty for diffusion models
-* **`done`**: `true` on the final chunk containing the image
-
----
-
-## 4. Example: Querying and Saving via cURL
-
-### Generating an Image via /api/generate (Direct)
-When calling Ollama directly, use `/api/generate`. The image is returned in the `image` field of the final NDJSON chunk:
-
-```bash
-curl -s -X POST http://127.0.0.1:11434/api/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "x/flux2-klein:4b",
-    "prompt": "A mystical forest at sunrise",
-    "stream": true,
-    "width": 512,
-    "height": 512,
-    "steps": 4,
-    "options": {
-      "seed": 42
-    }
-  }' > output.ndjson
-```
-
-Extract the image from the final line (the one with `"done":true`):
-
-```bash
-# Extract the image field from the final chunk
-jq -r 'select(.done == true) | .image' output.ndjson | base64 -d > output.png
-```
-
-Or in JavaScript:
-
-```javascript
-const fs = require('fs');
-const lines = fs.readFileSync('output.ndjson', 'utf8').trim().split('\n');
-const finalChunk = JSON.parse(lines[lines.length - 1]);
-const base64Image = finalChunk.image; // Note: field is "image", not "response"
-fs.writeFileSync('output.png', Buffer.from(base64Image, 'base64'));
-```
-
-### Image-to-Image via /api/generate (Direct)
-To transform an existing image, pass it as a base64-encoded string in the `"images"` array at the **root level** of the payload:
-
-```bash
-curl -s -X POST http://127.0.0.1:11434/api/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "x/flux2-klein:4b",
-    "prompt": "Make it 3D cartoon style, smooth rendering, cute vivid style",
-    "images": [
-      "$(base64 -w 0 input.png)"
-    ],
-    "width": 512,
-    "height": 512,
-    "steps": 8
-  }' > output.ndjson
-```
-
-* **`images`**: Must be an array of base64-encoded image strings placed at the **root level**, not inside `"options"` or `"messages"`.
-
-> **⚠️ Known Issue: Image-to-Image is broken since Ollama 0.15.4**
->
-> The `images` parameter is accepted by the API, but the model ignores the input image and generates a completely unrelated image instead. This is a confirmed upstream bug in Ollama. Track the issue at [ollama/ollama#14306](https://github.com/ollama/ollama/issues/14306).
->
-> **Workaround:** Use the model for text-to-image generation only, or use an alternative tool (e.g. Stable Diffusion WebUI, ComfyUI, or diffusers pipeline) if you need controlled image-to-image transformations.
-
-### Generating an Image via /api/chat (Proxy)
-When using ollama-manager's proxy, the response is SSE and the image is in `message.content`:
-
-```bash
-curl -s -X POST http://127.0.0.1:7860/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "x/flux2-klein:4b",
-    "messages": [{"role": "user", "content": "A mystical forest at sunrise"}],
-    "width": 512,
-    "height": 512,
-    "steps": 4
-  }'
-```
-
-Parse the SSE stream to extract the base64 image from the final `event: chunk`:
-
-```javascript
-const responseText = "..."; // SSE stream response accumulated
-const chunkJson = JSON.parse(responseText.match(/event: chunk\ndata: (\{.*?\})/g).pop().replace("event: chunk\ndata: ", ""));
-const base64Image = chunkJson.message.content; 
-require('fs').writeFileSync('output.png', Buffer.from(base64Image, 'base64'));
-```
-
----
-
-## 5. OS & Hardware Compatibility (MLX Model Runners)
-
-Many diffusion-based models (like experimental `Flux` or `Z-Image-Turbo` Ollama packages) utilize Apple's MLX machine learning framework as their runner engine. 
-
-### Compatibility Warning:
-* **MLX-based models run exclusively on Apple Silicon (macOS) devices.**
-* They are **not compatible** with Windows or Linux operating systems due to the lack of native MLX runner dynamic libraries.
-
-### Error Signature:
-If a user attempts to run an MLX-based model on Windows or Linux, Ollama will return a `500 Internal Server Error` with the following structure:
-```json
-{
-  "error": "mlx runner failed: Error: failed to initialize MLX: failed to load MLX dynamic library (searched: [...]) (exit: exit status 1)"
-}
-```
-
-### How `ollama-manager` Handles It:
-To improve user experience on unsupported platforms, `ollama-manager` intercepts this signature at both the backend and frontend layers:
-1. **Error Translation**: The raw technical error is translated into a user-friendly, localized notice (English/Spanish).
-2. **Graceful UI Fallback**: The chat interface displays the notice as a standard text message in the chat timeline rather than rendering a broken/failed image, and displays a toast notification with the details.
+- [Upstream API types](https://github.com/ollama/ollama/blob/main/api/types.go): `GenerateRequest`, `GenerateResponse`, `ChatRequest`, and `Message`.
+- [Upstream endpoint implementation](https://github.com/ollama/ollama/blob/main/server/routes.go): `GenerateHandler`.
+- [Ollama API documentation](https://docs.ollama.com/api)

@@ -21,6 +21,7 @@ Known capability strings observed in the wild:
 - `thinking`
 - `vision`
 - `embedding`
+- `decision` (System One classification/probability/scoring)
 - `audio`
 - `video` (rare; usually pending)
 - `image` (for diffusion-based image generation/image creator)
@@ -87,12 +88,21 @@ Capabilities reported by `/api/show` can still fail with real prompts. Recommend
 | thinking | Enable `think`; expect non-empty `message.thinking`. |
 | vision | Send a base64 image; expect non-empty description. |
 | embeddings | Call `/api/embed`; expect non-empty vector. |
+| decision | Call `/v1/systemone` with state and named questions; validate typed `answers` and probabilities/scores, not assistant prose. |
 | audio | Send a base64 **WAV** audio file; expect non-empty description. Treat as experimental; some models crash the runner. |
-| image | Send a text prompt; expect base64 PNG/JPEG image content in the response stream. |
+| image | First verify that the exact runtime exposes an image-generation endpoint; the upstream generate handler reviewed here rejects image-generation models. |
 
 ## Pitfalls
 
 - Some models report `audio` in `capabilities` but crash on real audio payloads. Always probe before trusting.
-- `video` is not yet natively supported. A practical fallback is frame extraction + vision model.
+- A model-card video capability does not guarantee a native video payload on the endpoint in use. The upstream embedding handler reviewed here rejects `input.video`; inspect the exact installed version before assuming video support.
 - Context length from `model_info` is the *architecture* limit. The *live* limit may differ; check `context_length` in `/api/ps` for loaded models.
-- Diffusion models (e.g., `Flux`) using Apple's MLX runner are not compatible with Windows or Linux due to lack of native MLX runner dynamic libraries, resulting in a `500 Internal Server Error`. Probes and runs should only be attempted on Apple Silicon (macOS) devices.
+- MLX-based packages require a compatible Apple Silicon/macOS runtime. This is a runner-specific restriction, not a blanket restriction on all vision models. See [image models](image-models.md).
+
+## Embeddings and decisions require task-specific routing
+
+`embedding` + `vision`/`audio` means potential image/audio vectorization, not chat completion. A missing `projector_info` alone is not proof that native multimodal/embedding models lack encoders; inspect exact weights, runtime, and runner support. Imported GGUF models still need the actual encoders/projector required by their architecture. Metadata and architecture clues remain distinct from a successful modality-specific probe.
+
+For embedding probes, validate finite, non-zero vectors and dimensions, and check controlled media changes rather than accepting any HTTP 200 as proof that media was used. For decision probes, call `/v1/systemone` with state and named questions and validate `answers`; no assistant prose is expected. Keep `decision` separate from `thinking` and do not use generation benchmarks for embedding/decision-only models.
+
+See [multimodal embeddings](multimodal-embeddings.md) and [decision models](decision-models.md) for exact payloads, supported evidence, runtime caveats, and native API contracts.
