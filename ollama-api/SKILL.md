@@ -1,6 +1,6 @@
 ---
 name: ollama-api
-description: Ollama REST API integration, capability detection, model routing, multimodal image/audio embeddings, and decision models (System One) for local AI agents. Use when building applications that interact with Ollama, detecting model capabilities, implementing chat with tools/vision/audio/embeddings, calling /v1/systemone, or streaming responses.
+description: Ollama REST API integration, capability detection, model routing, multimodal image/audio embeddings, text-to-speech (speech models), and decision models (System One) for local AI agents. Use when building applications that interact with Ollama, detecting model capabilities, implementing chat with tools/vision/audio/embeddings, calling /v1/audio/speech or /v1/systemone, or streaming responses.
 ---
 
 # Ollama Skill
@@ -10,9 +10,10 @@ Practical guidance for integrating with Ollama's REST API and building agents th
 ## When to Use
 
 - Building an application that calls Ollama locally or remotely.
-- Detecting which capabilities a model supports (completion, tools, vision, audio, embeddings, thinking, image). See [`references/capabilities.md`](references/capabilities.md) and [`references/modelfile-capability-unlock.md`](references/modelfile-capability-unlock.md) for detection and repair.
+- Detecting which capabilities a model supports (completion, tools, vision, audio, speech, embeddings, thinking, image). See [`references/capabilities.md`](references/capabilities.md) and [`references/modelfile-capability-unlock.md`](references/modelfile-capability-unlock.md) for detection and repair.
 - Implementing chat with streaming, tool calling, structured outputs, multimodal inputs, or image generation. See [`references/image-models.md`](references/image-models.md) for diffusion-based models.
 - Implementing image/audio embeddings or decision-only model workflows. See [`references/multimodal-embeddings.md`](references/multimodal-embeddings.md) and [`references/decision-models.md`](references/decision-models.md).
+- Implementing text-to-speech, voice selection, or audio playback. See [`references/speech-models.md`](references/speech-models.md).
 
 ## Quick Reference
 
@@ -33,6 +34,7 @@ Practical guidance for integrating with Ollama's REST API and building agents th
 | `/api/ps` | GET | Running models + memory usage |
 | `/api/chat` | POST | Chat completion (stream or sync) |
 | `/api/embed` | POST | Text or supported multimodal embeddings |
+| `/v1/audio/speech` | POST | Text-to-speech with a `speech` model (raw audio bytes) |
 | `/v1/systemone` | POST | Decision probabilities, classification, and scoring |
 | `/api/create` | POST | Create a derived model |
 | `/api/pull` | POST | Download a model (NDJSON stream) |
@@ -50,6 +52,7 @@ Models report capabilities with three confidence levels. For the full detection 
 
 - `embedding` without `completion`: use `/api/embed`; optional image/audio inputs require verified modality support. Do not route a vision-capable embedder through chat.
 - `decision` without `completion`: use `/v1/systemone`; read `answers`, not assistant text.
+- `speech` without `completion`: use `/v1/audio/speech`; the response is raw audio bytes, not a message. `audio` is the opposite direction (audio input), so never route on the word alone.
 - `completion`: use chat/generate as appropriate; `vision`, `audio`, `tools`, and `thinking` are additional task-specific capabilities.
 - A declared capability is not an end-to-end execution result. Preserve declared modalities for native multimodal/embedding models without `projector_info`, and probe the exact model/runtime before trusting media support.
 
@@ -120,6 +123,7 @@ Load these as needed:
 - **[`references/cloud.md`](references/cloud.md)** — Cloud models, web search API, authentication, and IDE integrations.
 - **[`references/multimodal-embeddings.md`](references/multimodal-embeddings.md)** — Native image/audio embedding payloads, EmbeddingGemma 2 variants, projector caveats, RAG representation policies, and runtime validation.
 - **[`references/decision-models.md`](references/decision-models.md)** — Native System One endpoints, choice/noul/score contracts, image decisions, model/runtime limits, and latency/usage interpretation.
+- **[`references/speech-models.md`](references/speech-models.md)** — Text-to-speech contract, voice enumeration and its version gate, audio formats, 4096-character limit, and chars/s plus cold-load telemetry.
 
 ## Troubleshooting
 

@@ -57,6 +57,16 @@ curl http://localhost:11434/api/embed -d '{
 }'
 ```
 
+### Text-to-Speech
+```bash
+curl http://localhost:11434/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"phonon:40m-es","input":"Hola, esto es una prueba.","voice":"default"}' \
+  --output speech.wav
+```
+
+Any non-audio option is rejected instead of ignored, so `mp3`, a non-default `speed`, or `instructions` come back as `400`. Omit `voice` to use the checkpoint's own voice.
+
 ## Go
 
 ### Minimal HTTP Client
@@ -197,6 +207,22 @@ completion = client.chat.completions.create(
 print(completion.choices[0].message.content)
 ```
 
+### Text-to-Speech (OpenAI SDK)
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+# OpenAI SDKs stream audio by default; the bytes are a WAV here, not JSON.
+with client.audio.speech.with_streaming_response.create(
+    model="phonon:40m-es",
+    voice="default",
+    input="Hola, esto es una prueba.",
+    response_format="wav",
+) as response:
+    response.stream_to_file("speech.wav")
+```
+
 ### Structured Outputs (Pydantic)
 ```python
 from pydantic import BaseModel
@@ -269,6 +295,29 @@ const resp = await fetch("http://localhost:11434/api/chat", {
 });
 const data = await resp.json();
 console.log(data.message.content);
+```
+
+### Text-to-Speech (browser)
+
+The response is audio, not JSON, so read it as a blob and play it from a blob URL. `<audio src>` cannot point at the POST itself.
+
+```javascript
+async function speak(text, { model = "phonon:40m-es", voice = "" } = {}) {
+  const resp = await fetch("http://localhost:11434/v1/audio/speech", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, input: text.slice(0, 4096), voice }),
+  });
+  if (!resp.ok) {
+    const { error } = await resp.json(); // OpenAI-shaped {error:{message,...}}
+    throw new Error(error?.message || resp.statusText);
+  }
+  const url = URL.createObjectURL(await resp.blob());
+  const audio = new Audio(url);
+  audio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
+  await audio.play();
+  return audio;
+}
 ```
 
 ### OpenAI SDK

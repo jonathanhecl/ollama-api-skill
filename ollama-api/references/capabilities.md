@@ -23,6 +23,7 @@ Known capability strings observed in the wild:
 - `embedding`
 - `decision` (System One classification/probability/scoring)
 - `audio`
+- `speech` (text-to-speech output; the opposite direction of `audio` input)
 - `video` (rare; usually pending)
 - `image` (for diffusion-based image generation/image creator)
 
@@ -90,6 +91,7 @@ Capabilities reported by `/api/show` can still fail with real prompts. Recommend
 | embeddings | Call `/api/embed`; expect non-empty vector. |
 | decision | Call `/v1/systemone` with state and named questions; validate typed `answers` and probabilities/scores, not assistant prose. |
 | audio | Send a base64 **WAV** audio file; expect non-empty description. Treat as experimental; some models crash the runner. |
+| speech | Call `/v1/audio/speech` with a short `input`; expect `audio/wav` bytes with a valid RIFF header, not JSON. |
 | image | First verify that the exact runtime exposes an image-generation endpoint; the upstream generate handler reviewed here rejects image-generation models. |
 
 ## Pitfalls
@@ -105,4 +107,6 @@ Capabilities reported by `/api/show` can still fail with real prompts. Recommend
 
 For embedding probes, validate finite, non-zero vectors and dimensions, and check controlled media changes rather than accepting any HTTP 200 as proof that media was used. For decision probes, call `/v1/systemone` with state and named questions and validate `answers`; no assistant prose is expected. Keep `decision` separate from `thinking` and do not use generation benchmarks for embedding/decision-only models.
 
-See [multimodal embeddings](multimodal-embeddings.md) and [decision models](decision-models.md) for exact payloads, supported evidence, runtime caveats, and native API contracts.
+`speech` is a third task shape and the only one that returns binary audio: probe `/v1/audio/speech` and check the returned bytes and content type, and never read a `message.content` from it. Do not confuse it with `audio`, which is audio *input* to understanding models; a model can legitimately have one and not the other.
+
+See [multimodal embeddings](multimodal-embeddings.md), [decision models](decision-models.md), and [speech models](speech-models.md) for exact payloads, supported evidence, runtime caveats, and native API contracts.

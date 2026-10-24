@@ -12,6 +12,7 @@ Practical guidance for integrating with Ollama's REST API and building agents th
 - **Multimodal inputs** (images, audio) via base64
 - **Multimodal embeddings** (EmbeddingGemma 2, image/audio object inputs, projector caveats, and RAG representation compatibility)
 - **Decision models / System One** (`/v1/systemone`, choice/noul/score, Clef image decisions, and cold/warm latency)
+- **Speech models / text-to-speech** (`/v1/audio/speech`, voice enumeration and its version gate, audio formats, chars/s and cold-load telemetry)
 - **Image-model compatibility** (image understanding vs generation, native endpoint limitations, and runner/platform checks)
 - **Troubleshooting** common issues (GPU, remote access, proxy, CORS, MLX runners)
 
@@ -28,6 +29,7 @@ Practical guidance for integrating with Ollama's REST API and building agents th
 | [`ollama-api/references/modelfile-capability-unlock.md`](ollama-api/references/modelfile-capability-unlock.md) | Modelfile instructions on how Ollama detects and unlocks model capabilities |
 | [`ollama-api/references/multimodal-embeddings.md`](ollama-api/references/multimodal-embeddings.md) | Image/audio embeddings, model variants, RAG compatibility, and runtime validation |
 | [`ollama-api/references/decision-models.md`](ollama-api/references/decision-models.md) | System One decision contracts, image inputs, runtime requirements, and latency |
+| [`ollama-api/references/speech-models.md`](ollama-api/references/speech-models.md) | Text-to-speech endpoint, voice list and version gate, formats, limits, and telemetry |
 
 ## When to use this skill
 

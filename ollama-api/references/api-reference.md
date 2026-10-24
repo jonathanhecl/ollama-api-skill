@@ -71,6 +71,7 @@ Returns detailed metadata for a single model. This is the primary source for cap
     "clip.has_audio_encoder": false
   },
   "capabilities": ["completion", "tools", "thinking"],
+  "voices": ["default"],
   "modified_at": "..."
 }
 ```
@@ -79,6 +80,7 @@ Key fields:
 - `capabilities`: official capability list from Ollama.
 - `model_info`: architecture, context length, and model-specific metadata. Look for keys ending in `.context_length`.
 - `projector_info`: multimodal encoder flags (vision/audio).
+- `voices`: voice profiles of a `speech` model. Present only from Ollama 0.40.11 on; an absent field means the runtime cannot enumerate them, not that the model lacks voices. See [speech models](speech-models.md).
 
 ### GET /api/ps
 
@@ -306,6 +308,21 @@ The response contains `model`, `answers`, and token `usage`, not `message.conten
 
 The native API accepts 1–64 named questions. Requests are limited to 64 KiB without images or 32 MiB with images; input is not truncated. Local compatible GGUF weights and a scoring-capable runner are required. Cloud and MLX/Safetensors models, streaming, video, tools, and generation controls are unsupported. Measure request latency in the client; the documented response has token usage but no isolated load/evaluation timing. See the [official System One reference](https://docs.ollama.com/api/systemone) for complete request limits and model-specific criteria bounds.
 
+### POST /v1/audio/speech (speech models)
+
+OpenAI-compatible path, raw audio response (v0.40.9+; MLX/Apple Silicon checkpoints today). Send `model`, `input` (at most 4096 characters), and optionally `voice`, `response_format` (`wav` default or `pcm`), `speed` (only `1`), `stream_format` (`audio`). Unsupported options are rejected with a `400` instead of being ignored, and an unknown `voice` returns a `400` that lists the available ones. The endpoint has no `keep_alive`: unload with `/api/generate` and `keep_alive: 0`.
+
+```json
+{
+  "model": "phonon:40m-es",
+  "input": "Hola, esto es una prueba.",
+  "voice": "default",
+  "response_format": "wav"
+}
+```
+
+**Response:** `Content-Type: audio/wav` (16-bit mono 24 kHz RIFF, chunked, no `Content-Length`) or `audio/pcm` (raw 16-bit LE, no header). There is no JSON envelope and no timing, so measure wall-clock latency in the client and classify cold/warm with a `/api/ps` read taken before the call. Voice names come from `/api/show.voices` only from 0.40.11 on; read them there rather than probing with a guessed name. See [speech models](speech-models.md) for the full contract.
+
 ### POST /api/create
 
 Creates a derived model from an existing one, overriding system prompt, template, or parameters without re-downloading weights.
@@ -401,6 +418,8 @@ api_key  = "ollama"  // required but ignored
 ```
 
 See [`examples.md`](examples.md) for SDK usage.
+
+Speech is the exception to the JSON-shaped `/v1` family: `/v1/audio/speech` streams raw audio bytes, so an SDK call must read the response as binary, not parse it as JSON or as an OpenAI chat object. See [speech models](speech-models.md).
 
 ## Streaming Protocol
 
